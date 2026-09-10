@@ -78,7 +78,7 @@
 
 <div class="panel" id="ui" style="display:none">
   <h1>知识库图谱</h1>
-  <div class="sub"><b id="nN">0</b> 个条目 · <b id="eN">0</b> 条链接</div>
+  <div class="sub"><b id="nN">0</b> 个条目 · <b id="eN">0</b> 条链接 · 标签避让隐藏 <b id="hid">0</b></div>
   <input type="search" id="q" placeholder="搜标题或路径…" autocomplete="off">
   <div id="legend"></div>
   <hr>
@@ -98,7 +98,12 @@ const INLINE = /*__DATA__*/null;
 const PALETTE = ['#58a6ff','#3fb950','#d29922','#f778ba','#a371f7','#39c5cf','#ff7b72','#bc8cff','#7ee787'];
 const $ = s => document.querySelector(s);
 let G = null, DATA = null, colorOf = {}, hidden = new Set(), showDir = false;
-let labelEls = new Map(), rafOn = false;
+let labelEls = new Map(), labelOrder = [], rafOn = false, hoverN = null;
+
+const nodeIdOf = e => (e && e.id !== undefined) ? e.id : e;
+const touches = (l, n) => nodeIdOf(l.source) === n.id || nodeIdOf(l.target) === n.id;
+const isNeighbor = n => hoverN && (n.id === hoverN.id ||
+  DATA.links.some(l => touches(l, hoverN) && (nodeIdOf(l.source) === n.id || nodeIdOf(l.target) === n.id)));
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -122,15 +127,38 @@ function boot(data){
   G = ForceGraph3D()($('#graph'))
     .backgroundColor('#0d1117')
     .nodeLabel(n => '<div style="background:#161b22;border:1px solid #30363d;border-radius:6px;padding:4px 8px;color:#e6edf3;font:12px sans-serif">' + esc(n.id) + '</div>')
-    .nodeColor(n => nodeDim(n) ? '#21262d' : colorOf[n.group])
-    .nodeVal(n => 1.2 + Math.min(n.deg || 0, 8) * 0.9 + (n.isIndex ? 2.5 : 0))
+    .nodeColor(n => (nodeDim(n) || (hoverN && !isNeighbor(n))) ? '#21262d' : colorOf[n.group])
+    .nodeVal(n => 1.5 + Math.min(n.deg || 0, 8) * 1.1 + (n.isIndex ? 3 : 0))
+    .nodeRelSize(5)
     .nodeOpacity(0.95)
-    .linkColor(l => l.kind === 'dir' ? '#21262d' : (l.kind === 'wiki' ? '#3fb95088' : '#58a6ff88'))
-    .linkWidth(l => l.kind === 'dir' ? 0.3 : 0.8)
+    // linkWidth 必须留 0：非 0 会渲染成圆柱体，半径按图坐标算，
+    // 相机一拉远就细到不足一个像素、等于看不见。0 走 THREE.Line，永远 1px。
+    .linkWidth(0)
+    .linkOpacity(0.7)
+    .linkColor(l => {
+      if(hoverN) return touches(l, hoverN) ? '#ffffff' : '#191e25';
+      return l.kind === 'dir' ? '#3d444d' : (l.kind === 'wiki' ? '#3fb950' : '#58a6ff');
+    })
+    .onNodeHover(n => {
+      hoverN = n;
+      document.body.style.cursor = n ? 'pointer' : '';
+      G.linkColor(G.linkColor());          // 重设存取器以触发重绘
+      G.nodeColor(G.nodeColor());
+    })
     .onNodeClick(n => { focus(n); showInfo(n); })
     .onBackgroundClick(() => { $('#info').style.display = 'none'; });
 
-  G.d3Force('charge').strength(-140);
+  // 斥力别调太大：-140 会把图吹散，相机远到节点只剩几个像素。
+  // 默认 -30 偏挤，-55 在 50 个节点上刚好。
+  // distanceMax 是关键：不限制的话零链接的孤立条目会被无限推远，
+  // zoomToFit 为了框住它们只能拉远相机，结果图缩在中间、四周全是空白。
+  G.d3Force('charge').strength(-55).distanceMax(150);
+  G.d3Force('link').distance(34);
+  // 布局停下来后自动把整张图收进视口，否则初始相机距离和实际图尺寸无关
+  // 引擎 alpha 衰减到阈值就触发 onEngineStop，此时还有残余位移；延迟一拍再 fit。
+  // padding 给大一些，左侧控制面板会盖住图的左边。
+  G.onEngineStop(() => setTimeout(() => G.zoomToFit(700, 45), 250));
+  addEventListener('resize', () => G.zoomToFit(400, 45));
   applyData();
   renderLegend();
   $('#nN').textContent = data.nodes.length;
@@ -165,27 +193,45 @@ function rebuildLabels(){
     box.appendChild(el);
     labelEls.set(n, el);
   }
+  // 尺寸量一次就缓存：每帧读 offsetWidth 会触发强制重排，51 个标签足以卡帧
+  labelEls.forEach(el => { el._w = el.offsetWidth; el._h = el.offsetHeight; });
+  // 重要的先放（索引页 > 度数高 > 其余），冲突时后来的让位
+  labelOrder = [...labelEls.keys()].sort((x, y) =>
+    (y.isIndex ? 1 : 0) - (x.isIndex ? 1 : 0) || (y.deg || 0) - (x.deg || 0));
 }
 
 /** 每帧把 3D 坐标投影成屏幕坐标；相机一动就跟着动，所以用 rAF 而不是 onEngineTick */
 function syncLabels(){
   if(G && labelEls.size){
     const W = innerWidth, H = innerHeight;
-    labelEls.forEach((el, n) => {
-      if(n.x === undefined || n.x === null){ el.style.visibility = 'hidden'; return; }
+    const placed = [];
+    for(const n of labelOrder){
+      const el = labelEls.get(n);
+      if(!el) continue;
+      if(n.x === undefined || n.x === null){ el.style.visibility = 'hidden'; continue; }
       const p = G.graph2ScreenCoords(n.x, n.y, n.z || 0);
       // p.z 越界表示节点在相机背后，投影会翻到屏幕上造成鬼影
       if(!p || (p.z !== undefined && (p.z > 1 || p.z < -1)) ||
          p.x < -100 || p.y < -50 || p.x > W + 100 || p.y > H + 50){
-        el.style.visibility = 'hidden'; return;
+        el.style.visibility = 'hidden'; continue;
       }
+      const w = el._w || 60, h = el._h || 16;
+      // 与 CSS 的 translate(-50%,-150%) 对齐
+      const r = { l: p.x - w / 2, r: p.x + w / 2, t: p.y - h * 1.5, b: p.y - h * 0.5 };
+      let hit = false;
+      for(const q of placed){
+        if(r.l < q.r && r.r > q.l && r.t < q.b && r.b > q.t){ hit = true; break; }
+      }
+      if(hit){ el.style.visibility = 'hidden'; continue; }
+      placed.push(r);
       el.style.visibility = 'visible';
       el.style.left = p.x + 'px';
       el.style.top = p.y + 'px';
       const dim = nodeDim(n);
       el.classList.toggle('dim', dim);
       el.style.opacity = dim ? '0.3' : '1';
-    });
+    }
+    const hd = $('#hid'); if(hd) hd.textContent = labelOrder.length - placed.length;
   }
   requestAnimationFrame(syncLabels);
 }
