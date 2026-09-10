@@ -244,12 +244,132 @@ $('#labels').onchange = () => rebuildLabels();
 $('#flat').onchange = e => { G.numDimensions(e.target.checked ? 2 : 3); };
 
 function fail(m){ $('#err').textContent = m; }
-function load(text, from){
-  try { boot(JSON.parse(text)); }
-  catch(e){ fail(from + ' 解析失败：' + e.message); }
+
+/* ---------------- 记住上次的 graph.json ----------------
+   目的：在线版不要每次都手动拖文件。两层：
+   1. localStorage 存一份副本 —— 任何浏览器都行，下次打开秒出图
+   2. File System Access API 存文件句柄 —— Chrome/Edge 才有，好处是能
+      「重新读取同一个文件」，所以重新生成 graph.json 后点一下就刷新，
+      不用再翻文件对话框
+   数据全在本地，这个页面没有后端，什么都不会上传。                        */
+
+const LS_KEY = 'kb-graph:data';
+const LS_META = 'kb-graph:meta';
+let fileHandle = null;
+
+function idb(){
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('kb-graph', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('h');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function saveHandle(h){
+  try {
+    const db = await idb();
+    await new Promise((res, rej) => {
+      const t = db.transaction('h', 'readwrite');
+      t.objectStore('h').put(h, 'file');
+      t.oncomplete = res; t.onerror = () => rej(t.error);
+    });
+  } catch(e){ /* 不支持就算了，localStorage 那层还在 */ }
+}
+async function loadHandle(){
+  try {
+    const db = await idb();
+    return await new Promise((res, rej) => {
+      const t = db.transaction('h', 'readonly');
+      const q = t.objectStore('h').get('file');
+      q.onsuccess = () => res(q.result || null);
+      q.onerror = () => rej(q.error);
+    });
+  } catch(e){ return null; }
 }
 
-$('#pick').onclick = () => $('#file').click();
+function remember(text, name){
+  try {
+    localStorage.setItem(LS_KEY, text);
+    localStorage.setItem(LS_META, JSON.stringify({ name: name, size: text.length, at: Date.now() }));
+  } catch(e){ /* 超配额或隐私模式，忽略 */ }
+}
+
+function forget(){
+  try { localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_META); } catch(e){}
+  saveHandle(null);
+  location.reload();
+}
+
+/** 顶部条：显示数据来源，提供「重新读取 / 换文件 / 清除」 */
+function showBar(meta){
+  let bar = $('#bar');
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'bar';
+    bar.className = 'panel';
+    bar.style.cssText = 'top:12px;left:50%;transform:translateX(-50%);padding:7px 12px;' +
+      'font-size:12px;display:flex;align-items:center;gap:10px;z-index:10';
+    document.body.appendChild(bar);
+  }
+  const when = meta && meta.at ? new Date(meta.at).toLocaleString('zh-CN', {hour12:false}) : '';
+  bar.innerHTML = '<span style="color:var(--dim)">来自 <b style="color:var(--fg)">' +
+    esc((meta && meta.name) || 'graph.json') + '</b>' + (when ? ' · ' + esc(when) : '') + '</span>' +
+    (fileHandle ? '<a href="#" id="reread" style="color:var(--accent);text-decoration:none">重新读取</a>' : '') +
+    '<a href="#" id="swap" style="color:var(--accent);text-decoration:none">换文件</a>' +
+    '<a href="#" id="clear" style="color:var(--dim);text-decoration:none">清除</a>';
+  const rr = $('#reread');
+  if(rr) rr.onclick = e => { e.preventDefault(); rereadHandle(); };
+  $('#swap').onclick = e => { e.preventDefault(); pickFile(); };
+  $('#clear').onclick = e => { e.preventDefault(); forget(); };
+}
+
+function load(text, name, opts){
+  try {
+    boot(JSON.parse(text));
+    remember(text, name);
+    showBar({ name: name, at: Date.now() });
+  } catch(e){
+    fail(name + ' 解析失败：' + e.message);
+    if(opts && opts.fromCache) forget();
+  }
+}
+
+/** 优先用 File System Access API：能存句柄，之后一键重读同一个文件 */
+async function pickFile(){
+  if(window.showOpenFilePicker){
+    try {
+      const [h] = await window.showOpenFilePicker({
+        types: [{ description: 'graph.json', accept: { 'application/json': ['.json'] } }],
+        multiple: false,
+      });
+      fileHandle = h;
+      await saveHandle(h);
+      const f = await h.getFile();
+      load(await f.text(), f.name);
+      return;
+    } catch(e){
+      if(e && e.name === 'AbortError') return;   // 用户自己取消，不报错
+    }
+  }
+  $('#file').click();   // 退回普通 input
+}
+
+async function rereadHandle(){
+  if(!fileHandle) return;
+  try {
+    if(fileHandle.queryPermission){
+      let p = await fileHandle.queryPermission({ mode: 'read' });
+      if(p !== 'granted' && fileHandle.requestPermission){
+        p = await fileHandle.requestPermission({ mode: 'read' });
+      }
+      if(p !== 'granted'){ fail('没拿到读取权限，点「换文件」重新选一次'); return; }
+    }
+    const f = await fileHandle.getFile();
+    load(await f.text(), f.name);
+  } catch(e){ fail('重新读取失败：' + e.message + '（点「换文件」重选）'); }
+}
+
+$('#pick').onclick = () => pickFile();
 $('#demo').onclick = () => {
   fetch('./sample.json')
     .then(r => { if(!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
@@ -271,13 +391,44 @@ document.addEventListener('drop', e => {
   if(f) f.text().then(t => load(t, f.name));
 });
 
-(function init(){
+(async function init(){
+  // 1. 本地生成的 kb-graph.html：数据已内联，直接开
   if(INLINE){ boot(INLINE); return; }
+
+  // 2. ?data=<url> 显式指定
   const u = new URLSearchParams(location.search).get('data');
   if(u){
-    fetch(u).then(r => { if(!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then(t => load(t, u))
-      .catch(e => fail('拉取 ' + u + ' 失败：' + e.message));
+    try {
+      const r = await fetch(u);
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      load(await r.text(), u);
+    } catch(e){ fail('拉取 ' + u + ' 失败：' + e.message); }
+    return;
+  }
+
+  // 3. 上次记住的：先恢复 localStorage 副本让图立刻出来，
+  //    再拿文件句柄静默重读一次，把「重新生成过」的内容补上
+  fileHandle = await loadHandle();
+  let cached = null, meta = null;
+  try {
+    cached = localStorage.getItem(LS_KEY);
+    meta = JSON.parse(localStorage.getItem(LS_META) || 'null');
+  } catch(e){}
+
+  if(cached){
+    load(cached, (meta && meta.name) || 'graph.json', { fromCache: true });
+    showBar(meta);
+    if(fileHandle && fileHandle.queryPermission){
+      const p = await fileHandle.queryPermission({ mode: 'read' });
+      if(p === 'granted') rereadHandle();   // 权限还在就自动刷新，不弹窗
+    }
+    return;
+  }
+
+  if(fileHandle){
+    // 有句柄没缓存：点一下「重新读取」即可，不用再翻文件对话框
+    showBar(meta);
+    fail('上次用过 ' + esc((meta && meta.name) || 'graph.json') + '，点上方「重新读取」直接载入');
   }
 })();
 </script>
