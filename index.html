@@ -157,7 +157,11 @@ function boot(data){
   // 布局停下来后自动把整张图收进视口，否则初始相机距离和实际图尺寸无关
   // 引擎 alpha 衰减到阈值就触发 onEngineStop，此时还有残余位移；延迟一拍再 fit。
   // padding 给大一些，左侧控制面板会盖住图的左边。
+  // onEngineStop 不保证一定触发（数据小时 alpha 可能一直没降到阈值下），
+  // 所以除了它，再挂一个兜底定时器。两者都跑一遍没有副作用。
   G.onEngineStop(() => setTimeout(() => G.zoomToFit(700, 45), 250));
+  setTimeout(() => G.zoomToFit(600, 45), 1800);
+  setTimeout(() => G.zoomToFit(400, 45), 4000);
   addEventListener('resize', () => G.zoomToFit(400, 45));
   applyData();
   renderLegend();
