@@ -1,0 +1,9 @@
+# 这个仓库是公开的。默认忽略所有 json，防止把私有知识库的 graph.json 误提交进来。
+*.json
+!sample.json
+
+# 万一有人把私有库整个拷进来
+kb-graph.html
+company/
+personal/
+_memory-snapshots/

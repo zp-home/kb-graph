@@ -1,0 +1,233 @@
+{
+ "nodes": [
+  {
+   "id": "README.md",
+   "title": "知识库入口",
+   "group": "(根)",
+   "lines": 40,
+   "isIndex": true,
+   "deg": 4
+  },
+  {
+   "id": "conventions/README.md",
+   "title": "写作规范",
+   "group": "conventions",
+   "lines": 30,
+   "isIndex": true,
+   "deg": 4
+  },
+  {
+   "id": "conventions/note-1.md",
+   "title": "提交信息规范",
+   "group": "conventions",
+   "lines": 55,
+   "isIndex": false,
+   "deg": 2
+  },
+  {
+   "id": "conventions/note-2.md",
+   "title": "代码评审清单",
+   "group": "conventions",
+   "lines": 80,
+   "isIndex": false,
+   "deg": 3
+  },
+  {
+   "id": "conventions/note-3.md",
+   "title": "命名约定",
+   "group": "conventions",
+   "lines": 105,
+   "isIndex": false,
+   "deg": 1
+  },
+  {
+   "id": "projects/README.md",
+   "title": "项目索引",
+   "group": "projects",
+   "lines": 30,
+   "isIndex": true,
+   "deg": 3
+  },
+  {
+   "id": "projects/note-1.md",
+   "title": "某后端服务",
+   "group": "projects",
+   "lines": 55,
+   "isIndex": false,
+   "deg": 4
+  },
+  {
+   "id": "projects/note-2.md",
+   "title": "某前端应用",
+   "group": "projects",
+   "lines": 80,
+   "isIndex": false,
+   "deg": 2
+  },
+  {
+   "id": "setup/README.md",
+   "title": "本机环境",
+   "group": "setup",
+   "lines": 30,
+   "isIndex": true,
+   "deg": 3
+  },
+  {
+   "id": "setup/note-1.md",
+   "title": "编辑器配置",
+   "group": "setup",
+   "lines": 55,
+   "isIndex": false,
+   "deg": 1
+  },
+  {
+   "id": "setup/note-2.md",
+   "title": "终端与 shell",
+   "group": "setup",
+   "lines": 80,
+   "isIndex": false,
+   "deg": 2
+  },
+  {
+   "id": "troubleshooting/README.md",
+   "title": "踩过的坑索引",
+   "group": "troubleshooting",
+   "lines": 30,
+   "isIndex": true,
+   "deg": 4
+  },
+  {
+   "id": "troubleshooting/note-1.md",
+   "title": "构建缓存不一致",
+   "group": "troubleshooting",
+   "lines": 55,
+   "isIndex": false,
+   "deg": 3
+  },
+  {
+   "id": "troubleshooting/note-2.md",
+   "title": "时区导致的偏差一天",
+   "group": "troubleshooting",
+   "lines": 80,
+   "isIndex": false,
+   "deg": 2
+  },
+  {
+   "id": "troubleshooting/note-3.md",
+   "title": "依赖版本漂移",
+   "group": "troubleshooting",
+   "lines": 105,
+   "isIndex": false,
+   "deg": 2
+  }
+ ],
+ "links": [
+  {
+   "source": "README.md",
+   "target": "conventions/README.md",
+   "kind": "link"
+  },
+  {
+   "source": "README.md",
+   "target": "projects/README.md",
+   "kind": "link"
+  },
+  {
+   "source": "README.md",
+   "target": "setup/README.md",
+   "kind": "link"
+  },
+  {
+   "source": "README.md",
+   "target": "troubleshooting/README.md",
+   "kind": "link"
+  },
+  {
+   "source": "conventions/README.md",
+   "target": "conventions/note-1.md",
+   "kind": "link"
+  },
+  {
+   "source": "conventions/README.md",
+   "target": "conventions/note-2.md",
+   "kind": "link"
+  },
+  {
+   "source": "conventions/note-1.md",
+   "target": "conventions/note-2.md",
+   "kind": "link"
+  },
+  {
+   "source": "conventions/README.md",
+   "target": "conventions/note-3.md",
+   "kind": "link"
+  },
+  {
+   "source": "projects/README.md",
+   "target": "projects/note-1.md",
+   "kind": "link"
+  },
+  {
+   "source": "projects/README.md",
+   "target": "projects/note-2.md",
+   "kind": "link"
+  },
+  {
+   "source": "projects/note-1.md",
+   "target": "projects/note-2.md",
+   "kind": "link"
+  },
+  {
+   "source": "setup/README.md",
+   "target": "setup/note-1.md",
+   "kind": "link"
+  },
+  {
+   "source": "setup/README.md",
+   "target": "setup/note-2.md",
+   "kind": "link"
+  },
+  {
+   "source": "troubleshooting/README.md",
+   "target": "troubleshooting/note-1.md",
+   "kind": "link"
+  },
+  {
+   "source": "troubleshooting/README.md",
+   "target": "troubleshooting/note-2.md",
+   "kind": "link"
+  },
+  {
+   "source": "troubleshooting/README.md",
+   "target": "troubleshooting/note-3.md",
+   "kind": "link"
+  },
+  {
+   "source": "troubleshooting/note-1.md",
+   "target": "troubleshooting/note-3.md",
+   "kind": "link"
+  },
+  {
+   "source": "projects/note-1.md",
+   "target": "troubleshooting/note-2.md",
+   "kind": "link"
+  },
+  {
+   "source": "setup/note-2.md",
+   "target": "troubleshooting/note-1.md",
+   "kind": "link"
+  },
+  {
+   "source": "conventions/note-2.md",
+   "target": "projects/note-1.md",
+   "kind": "link"
+  }
+ ],
+ "groups": [
+  "(根)",
+  "conventions",
+  "projects",
+  "setup",
+  "troubleshooting"
+ ]
+}
